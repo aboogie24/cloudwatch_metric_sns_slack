@@ -61,6 +61,42 @@ data "aws_iam_policy_document" "main" {
 resource "aws_sns_topic" "test" {
   name = "test-topic-with-policy"
 }
+resource "aws_sqs_queue" "test_sqs" {
+  name = "test-update-queue"
+  redrive_policy = "{\"deadletterTargetArn\":\"${aws_sqs_queue.test_dl_queue.arn}\",\"maxReceiveCount\":5}"
+  visibility_timeout_seconds = 300 
+}
+
+resource "aws_sqs_queue" "test_dl_queue" {
+  name = "test-updates-dl-queue"
+}
+
+resource "aws_sns_topic_subscription" "sqs_update_target" {
+  topic_arn = aws_sns_topic.test.arn 
+  protocol = "sqs"
+  endpoint = aws_sqs_queue.test_sqs.arn
+}
+
+# resource "aws_sqs_queue_policy" "sqs_update_policy" {
+#   queue_url = aws_sqs_queue.test_sqs.id
+#   policy = {
+#     statement = {
+#       effect = "Allow"
+#       actions = ["sqs.SendMessage"]
+
+#       resources = [aws_sqs_queue.test_sqs.arn]
+
+#       condition = [
+#         aws_sns_topic.test.arn,
+#       ]
+#     }
+#   }
+
+#   depends_on = [
+#     aws_sns_topic.test, 
+#     aws_sqs_queue.test_sqs,
+#   ]
+# }
 
 resource "aws_sns_topic_policy" "sns_topic_test" {
   arn = aws_sns_topic.test.arn 
@@ -117,7 +153,7 @@ resource "aws_lambda_function" "function" {
   }
 
   dead_letter_config {
-    target_arn = aws_sns_topic.test.arn 
+    target_arn = aws_sqs_queue.test_sqs.arn
   }
 
   depends_on = [
